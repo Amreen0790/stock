@@ -1,450 +1,433 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Growth Potential Comparator — AI stock vs Mutual Fund</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Growth Potential Analyzer — AI Stocks & Mutual Funds</title>
+  <!-- TailwindCSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
   <!-- Chart.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
-    :root{
-      --bg:#0f1724; --card:#0b1220; --muted:#9aa7bf; --accent:#7c5cff;
-      --glass: rgba(255,255,255,0.03);
-    }
-    html,body{height:100%;}
-    body{
-      margin:0; font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue";
-      background:linear-gradient(180deg,#031229 0%, #071428 60%);
-      color:#e6eef8; padding:28px;
-      -webkit-font-smoothing:antialiased;
-    }
-    .container{max-width:1000px;margin:0 auto;}
-    header{display:flex;align-items:center;gap:16px;margin-bottom:18px}
-    h1{margin:0;font-size:20px}
-    p.lead{margin:0;color:var(--muted);font-size:13px}
-    .grid{display:grid;grid-template-columns:1fr 380px;gap:18px;margin-top:18px}
-    .card{background:var(--card);border-radius:12px;padding:14px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
-    .small{font-size:13px;color:var(--muted)}
-    label{display:block;font-size:13px;margin-bottom:6px;color:var(--muted)}
-    input[type="text"], textarea, select{
-      width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);
-      background:transparent;color:inherit;box-sizing:border-box;
-      font-size:13px;
-    }
-    textarea{min-height:110px;resize:vertical}
-    .row{display:flex;gap:8px;align-items:center}
-    button{
-      background:linear-gradient(90deg,var(--accent),#5b9cff);border:0;padding:8px 12px;border-radius:8px;color:white;cursor:pointer;
-      font-weight:600;
-    }
-    .metrics{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-    .metric{background:var(--glass);padding:10px;border-radius:8px;min-width:120px}
-    .winner{border:2px solid #00e676;box-shadow:0 8px 30px rgba(0,230,118,0.06)}
-    canvas{max-width:100%}
-    .muted{color:var(--muted)}
-    footer{margin-top:18px;color:var(--muted);font-size:12px}
-    @media (max-width:920px){
-      .grid{grid-template-columns:1fr; }
-    }
+    /* Subtle scrollbar styling */
+    * { scrollbar-width: thin; }
+    .drag-hover { outline: 2px dashed rgba(59,130,246,.6); outline-offset: 6px; }
   </style>
 </head>
-<body>
-  <div class="container">
-    <header>
-      <div>
-        <h1>Growth Potential Comparator</h1>
-        <p class="lead">Compare two instruments (AI stock vs Mutual Fund) and see which has higher growth potential for a chosen timeframe.</p>
+<body class="bg-slate-50 min-h-screen text-slate-900">
+  <div class="max-w-7xl mx-auto p-6">
+    <header class="mb-6 flex items-center justify-between">
+      <h1 class="text-2xl md:text-3xl font-bold">Growth Potential Analyzer <span class="text-slate-500">(AI Stocks & Mutual Funds)</span></h1>
+      <div class="flex items-center gap-2">
+        <button id="btnDemo" class="px-3 py-2 rounded-2xl bg-sky-600 text-white hover:bg-sky-700 shadow">Quick demo data</button>
+        <button id="btnReset" class="px-3 py-2 rounded-2xl bg-white border border-slate-300 hover:border-slate-400 shadow">Reset</button>
       </div>
     </header>
 
-    <div class="grid">
-      <div>
-        <div class="card">
-          <div style="display:flex;gap:12px;align-items:center;justify-content:space-between">
-            <div>
-              <div class="small">Instrument A name</div>
-              <input id="nameA" type="text" value="AI Stock" />
-            </div>
-            <div>
-              <div class="small">Instrument B name</div>
-              <input id="nameB" type="text" value="Mutual Fund" />
-            </div>
-          </div>
-
-          <hr style="margin:12px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)">
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div>
-              <label>Paste CSV for A (date,close — header optional)</label>
-              <textarea id="csvA" placeholder="e.g. 2025-01-02,100.5\n2025-01-03,101.2"></textarea>
-            </div>
-            <div>
-              <label>Paste CSV for B (date,close)</label>
-              <textarea id="csvB" placeholder="e.g. 2025-01-02,50.2\n2025-01-03,50.9"></textarea>
-            </div>
-          </div>
-
-          <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
-            <div>
-              <label>Timeframe</label>
-              <select id="timeframe">
-                <option value="1M">1 month</option>
-                <option value="3M">3 months</option>
-                <option value="6M">6 months</option>
-                <option value="1Y" selected>1 year</option>
-                <option value="3Y">3 years</option>
-              </select>
-            </div>
-
-            <div style="flex:1">
-              <label>Analysis method</label>
-              <select id="method">
-                <option value="default" selected>risk-adjusted growth (CAGR/volatility)</option>
-                <option value="cagr">pure CAGR</option>
-                <option value="vol_adj">volatility-adjusted (CAGR - k * volatility)</option>
-              </select>
-            </div>
-
-            <div style="align-self:flex-end">
-              <button id="analyzeBtn">Analyze</button>
-            </div>
-          </div>
-
-          <div style="margin-top:12px" class="small muted">
-            Tip: If you don't paste data, the demo will generate synthetic example price series.
-            You can also replace the synthetic data by hooking a live API (example code commented below).
-          </div>
-
-          <hr style="margin:12px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)">
-
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <div class="metric" id="metricA">
-              <div class="small">A — <span id="labelA">AI Stock</span></div>
-              <div><strong id="cagrA">—</strong> CAGR</div>
-              <div class="small">Volatility: <strong id="volA">—</strong></div>
-              <div class="small">Score: <strong id="scoreA">—</strong></div>
-            </div>
-
-            <div class="metric" id="metricB">
-              <div class="small">B — <span id="labelB">Mutual Fund</span></div>
-              <div><strong id="cagrB">—</strong> CAGR</div>
-              <div class="small">Volatility: <strong id="volB">—</strong></div>
-              <div class="small">Score: <strong id="scoreB">—</strong></div>
-            </div>
-
-            <div style="flex:1;min-width:220px">
-              <div class="small">Decision</div>
-              <div id="decision" style="padding:10px;border-radius:8px;background:rgba(255,255,255,0.02);margin-top:6px">No analysis yet</div>
-            </div>
-          </div>
-
-          <div style="margin-top:14px">
-            <div class="small">Charts</div>
-            <canvas id="chartA" height="80"></canvas>
-            <canvas id="chartB" height="80" style="margin-top:8px"></canvas>
-          </div>
-
+    <!-- Timeframe Controls -->
+    <section class="bg-white rounded-2xl shadow p-4 md:p-6 mb-6">
+      <div class="grid md:grid-cols-5 gap-4 items-end">
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium mb-1" for="startDate">Start date</label>
+          <input id="startDate" type="date" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500" />
         </div>
-
-        <div class="card" style="margin-top:12px">
-          <div class="small">How the scoring works (simple demo model)</div>
-          <ul class="small muted">
-            <li>CAGR = compounded annual growth rate over the chosen timeframe.</li>
-            <li>Volatility = annualized standard deviation of daily returns (sqrt(252) * std(daily returns)).</li>
-            <li>Score = CAGR / volatility (higher score = more growth per unit risk).</li>
-            <li>This is a demonstration. Real investment decisions need deeper analysis.</li>
-          </ul>
-
-          <hr style="margin:8px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)">
-
-          <div class="small">Developer notes:</div>
-          <ol class="small muted">
-            <li>To fetch live data programmatically, use an API (Alpha Vantage, Yahoo Finance, etc.) — include your API key and map to CSV format expected.</li>
-            <li>Example fetch code is included in the script (commented).</li>
-          </ol>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium mb-1" for="endDate">End date</label>
+          <input id="endDate" type="date" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500" />
         </div>
-
+        <div>
+          <button id="btnAnalyze" class="w-full h-[42px] rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow">Analyze</button>
+        </div>
       </div>
+      <p class="text-xs text-slate-500 mt-2">Tip: If you upload CSVs (Date, Close) per ticker, the app will auto-pick prices within the chosen timeframe. Otherwise, you can type start/end prices manually.</p>
+    </section>
 
-      <aside>
-        <div class="card">
-          <div class="small">Quick example datasets</div>
-          <button id="loadExample">Load example synthetic data</button>
-          <hr style="margin:10px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)">
-
-          <div class="small">Export</div>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button id="exportJSON">Export results (JSON)</button>
-            <button id="exportCSV">Export CSV</button>
-          </div>
-
-          <hr style="margin:10px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)">
-          <div class="small muted">Notes</div>
-          <p class="small muted">This demo uses a simple ratio as "growth potential". You can replace scoring with ML models, analyst ratings, fundamentals, or alternative risk measures.</p>
-        </div>
-      </aside>
+    <!-- Tabs -->
+    <div class="mb-3 flex gap-2">
+      <button data-tab="ai" class="tab-btn px-3 py-2 rounded-2xl bg-slate-200 hover:bg-slate-300 text-sm font-medium">AI Stocks</button>
+      <button data-tab="mf" class="tab-btn px-3 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-sm font-medium">Mutual Funds</button>
     </div>
 
-    <footer>
-      Built as a local demo. Not financial advice. Use real data + backtesting before acting on anything.
+    <!-- Panels -->
+    <section id="panel-ai" class="panel bg-white rounded-2xl shadow p-4 md:p-6 mb-6">
+      <div class="flex flex-wrap items-center gap-2 mb-4">
+        <input id="aiTicker" placeholder="Add AI stock ticker (e.g., NVDA)" class="rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500 px-3 py-2" />
+        <button id="aiAdd" class="px-3 py-2 rounded-xl bg-sky-600 text-white hover:bg-sky-700">Add</button>
+        <div class="text-xs text-slate-500">Drag & drop CSV onto a row, or use the upload button.</div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm" id="aiTable">
+          <thead>
+            <tr class="bg-slate-100 text-left">
+              <th class="p-3">Ticker</th>
+              <th class="p-3">Start Price</th>
+              <th class="p-3">End Price</th>
+              <th class="p-3">Total Return</th>
+              <th class="p-3">CAGR</th>
+              <th class="p-3">Sharpe* (opt.)</th>
+              <th class="p-3">Data</th>
+              <th class="p-3"></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">*Sharpe shown if CSV uploaded (daily/monthly returns), risk‑free assumed 0 for simplicity.</p>
+    </section>
+
+    <section id="panel-mf" class="panel bg-white rounded-2xl shadow p-4 md:p-6 mb-6 hidden">
+      <div class="flex flex-wrap items-center gap-2 mb-4">
+        <input id="mfTicker" placeholder="Add mutual fund (e.g., VFIAX)" class="rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500 px-3 py-2" />
+        <button id="mfAdd" class="px-3 py-2 rounded-xl bg-sky-600 text-white hover:bg-sky-700">Add</button>
+        <div class="text-xs text-slate-500">Drag & drop CSV onto a row, or use the upload button.</div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm" id="mfTable">
+          <thead>
+            <tr class="bg-slate-100 text-left">
+              <th class="p-3">Symbol</th>
+              <th class="p-3">Start Price</th>
+              <th class="p-3">End Price</th>
+              <th class="p-3">Total Return</th>
+              <th class="p-3">CAGR</th>
+              <th class="p-3">Sharpe* (opt.)</th>
+              <th class="p-3">Data</th>
+              <th class="p-3"></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">*Sharpe shown if CSV uploaded (daily/monthly returns), risk‑free assumed 0 for simplicity.</p>
+    </section>
+
+    <!-- Results & Charts -->
+    <section class="bg-white rounded-2xl shadow p-4 md:p-6">
+      <div class="grid md:grid-cols-2 gap-6">
+        <div>
+          <h2 class="text-lg font-semibold mb-2">Ranking — Most Growth Potential</h2>
+          <div class="text-xs text-slate-500 mb-3">Ranked by CAGR within the selected timeframe. Toggle to Sharpe if available.</div>
+          <div class="flex items-center gap-2 mb-3">
+            <label class="flex items-center gap-2 text-sm"><input type="radio" name="rankMetric" value="cagr" checked> CAGR</label>
+            <label class="flex items-center gap-2 text-sm"><input type="radio" name="rankMetric" value="sharpe"> Sharpe</label>
+          </div>
+          <ol id="rankList" class="list-decimal ml-5 space-y-1 text-sm"></ol>
+        </div>
+        <div>
+          <h2 class="text-lg font-semibold mb-2">Top CAGR Chart</h2>
+          <canvas id="cagrChart" height="220"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <footer class="text-xs text-slate-500 mt-6">
+      <p>
+        CSV format: columns <code>Date</code>, <code>Close</code>. The app picks prices closest to the selected dates and computes returns; if no CSV is present, it uses the typed prices.
+      </p>
     </footer>
   </div>
 
-<script>
-/*
-Utilities:
-- parseCSV(text) => [{date: Date, close: Number}, ...]
-- if CSV missing or invalid, generateSyntheticData(name, days, drift, vol)
-- compute CAGR, volatility, score
-*/
+  <script>
+    /*** Utilities ***/
+    const $ = (sel, ctx=document) => ctx.querySelector(sel);
+    const $$ = (sel, ctx=document) => Array.from(ctx.querySelectorAll(sel));
+    const fmtPct = (x) => isFinite(x) ? (x*100).toFixed(2) + '%' : '—';
+    const fmtNum = (x) => isFinite(x) ? Number(x).toFixed(2) : '';
+    const daysBetween = (a,b) => Math.abs((b - a)/86400000);
+    const yearsBetween = (a,b) => daysBetween(a,b)/365.25;
 
-function parseCSV(text){
-  // Accepts date,close per line; header optional
-  const lines = text.trim().split(/\\r?\\n/).map(l=>l.trim()).filter(Boolean);
-  const out = [];
-  for (let line of lines){
-    // skip obvious headers
-    if (/date/i.test(line) && /close/i.test(line)) continue;
-    const parts = line.split(/[,;\\t]/).map(p=>p.trim());
-    if (parts.length < 2) continue;
-    const date = new Date(parts[0]);
-    const close = parseFloat(parts[1].replace(/[^0-9.\\-]/g,''));
-    if (!isNaN(date.getTime()) && !isNaN(close)) out.push({date, close});
-  }
-  // sort ascending by date
-  out.sort((a,b)=>a.date - b.date);
-  return out;
-}
+    // Parse CSV text into array of {date: Date, close: Number}
+    function parseCSV(text) {
+      const lines = text.trim().split(/\r?\n/);
+      const header = lines.shift().split(',').map(h => h.trim().toLowerCase());
+      const dIdx = header.indexOf('date');
+      const cIdx = header.indexOf('close');
+      if (dIdx === -1 || cIdx === -1) throw new Error('CSV must have Date and Close columns');
+      const rows = [];
+      for (const line of lines) {
+        const parts = line.split(',');
+        if (parts.length < Math.max(dIdx, cIdx)+1) continue;
+        const d = new Date(parts[dIdx]);
+        const c = parseFloat(parts[cIdx]);
+        if (!isNaN(d) && isFinite(c)) rows.push({date: d, close: c});
+      }
+      rows.sort((a,b) => a.date - b.date);
+      return rows;
+    }
 
-function generateSyntheticData(days=252, start=100, drift=0.12, vol=0.35){
-  // Geometric Brownian Motion daily steps. drift and vol are annual.
-  // daily drift ~ (mu - 0.5*sigma^2)/252, daily sigma = sigma/sqrt(252)
-  const mu = drift;
-  const sigma = vol;
-  const dt = 1/252;
-  let price = start;
-  const out = [];
-  const today = new Date();
-  for(let i=days-1;i>=0;i--){
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    out.push({date:d, close: price});
-    // next
-    const rnd = gaussianRand();
-    const daily = Math.exp((mu - 0.5*sigma*sigma)*dt + sigma*Math.sqrt(dt)*rnd);
-    price = price * daily;
-  }
-  return out;
-}
+    // Pick price closest to target date within data
+    function priceClosest(data, targetDate) {
+      if (!data || !data.length) return null;
+      let best = data[0];
+      let bestDiff = Math.abs(data[0].date - targetDate);
+      for (const r of data) {
+        const diff = Math.abs(r.date - targetDate);
+        if (diff < bestDiff) { best = r; bestDiff = diff; }
+      }
+      return best.close;
+    }
 
-// Box-Muller gaussian
-function gaussianRand(){
-  let u=0,v=0;
-  while(u===0) u=Math.random();
-  while(v===0) v=Math.random();
-  return Math.sqrt(-2.0*Math.log(u)) * Math.cos(2*Math.PI*v);
-}
+    // Compute Sharpe from a series of closes (assumes equal spacing, rf=0)
+    function computeSharpe(data) {
+      if (!data || data.length < 3) return null;
+      const rets = [];
+      for (let i=1;i<data.length;i++) {
+        const r = (data[i].close / data[i-1].close) - 1;
+        if (isFinite(r)) rets.push(r);
+      }
+      if (rets.length < 2) return null;
+      const avg = rets.reduce((a,b)=>a+b,0)/rets.length;
+      const sd = Math.sqrt(rets.reduce((a,b)=>a+(b-avg)*(b-avg),0)/(rets.length-1));
+      if (sd === 0 || !isFinite(sd)) return null;
+      // Scale to annualized roughly (assuming ~252 trading days or 12 months). We'll infer cadence.
+      const periods = data.length - 1;
+      const days = (data.at(-1).date - data[0].date)/86400000;
+      const perYear = days > 300 ? 252 : 12; // crude: if > 300 days, assume daily; else monthly
+      const scale = Math.sqrt(perYear);
+      return (avg/ sd) * scale;
+    }
 
-function sliceByTimeframe(series, tf){
-  // series sorted ascending by date
-  if (!series || series.length===0) return [];
-  const lastDate = series[series.length-1].date;
-  let cutoff = new Date(lastDate);
-  switch(tf){
-    case '1M': cutoff.setMonth(cutoff.getMonth()-1); break;
-    case '3M': cutoff.setMonth(cutoff.getMonth()-3); break;
-    case '6M': cutoff.setMonth(cutoff.getMonth()-6); break;
-    case '1Y': cutoff.setFullYear(cutoff.getFullYear()-1); break;
-    case '3Y': cutoff.setFullYear(cutoff.getFullYear()-3); break;
-    default: cutoff.setFullYear(cutoff.getFullYear()-1);
-  }
-  const filtered = series.filter(pt => pt.date >= cutoff);
-  // If not enough points, return whole series
-  return filtered.length >= 5 ? filtered : series;
-}
+    /*** State ***/
+    const state = {
+      activeTab: 'ai',
+      ai: [], // {ticker, start, end, csvData, sharpe}
+      mf: [], // {symbol, start, end, csvData, sharpe}
+      chart: null
+    };
 
-function computeMetrics(series){
-  // assume daily-ish data
-  if (!series || series.length < 2) return null;
-  const closes = series.map(p => p.close);
-  const n = closes.length;
-  const startPrice = closes[0];
-  const endPrice = closes[closes.length-1];
-  // time in years (use actual dates)
-  const days = (series[series.length-1].date - series[0].date) / (1000*3600*24);
-  const years = Math.max(days/365.25, 1/252); // avoid zero
-  // CAGR
-  const cagr = Math.pow(endPrice / startPrice, 1/years) - 1;
-  // daily returns
-  const dailyRets = [];
-  for(let i=1;i<closes.length;i++){
-    dailyRets.push( (closes[i] - closes[i-1]) / closes[i-1] );
-  }
-  // sample std dev
-  const mean = dailyRets.reduce((a,b)=>a+b,0)/dailyRets.length;
-  const variance = dailyRets.reduce((a,b)=>a + Math.pow(b-mean,2),0) / (dailyRets.length - 1 || 1);
-  const sd = Math.sqrt(variance);
-  const annualizedVol = sd * Math.sqrt(252);
-  // Score: CAGR / vol (if vol very small, handle)
-  const score = annualizedVol > 1e-6 ? (cagr / annualizedVol) : (cagr * 100);
-  return {
-    cagr, annualizedVol, score, years, startPrice, endPrice, points: series.length, dailyRets
-  };
-}
+    /*** Tab handling ***/
+    $$(".tab-btn").forEach(btn => btn.addEventListener('click', () => {
+      state.activeTab = btn.dataset.tab;
+      $$('#panel-ai, #panel-mf').forEach(p => p.classList.add('hidden'));
+      $('#panel-'+state.activeTab).classList.remove('hidden');
+      $$(".tab-btn").forEach(b => b.classList.toggle('bg-slate-200', b===btn));
+      $$(".tab-btn").forEach(b => b.classList.toggle('bg-slate-100', b!==btn));
+      render();
+    }));
 
-function formatPct(x){
-  if (x === null || x === undefined || isNaN(x)) return '—';
-  return (x*100).toFixed(2) + '%';
-}
+    /*** Row rendering helpers ***/
+    function makeRow(item, type) {
+      const tr = document.createElement('tr');
+      tr.className = 'border-b last:border-0';
+      tr.innerHTML = `
+        <td class="p-3 font-medium">
+          <span>${type==='ai'?item.ticker:item.symbol}</span>
+        </td>
+        <td class="p-3"><input class="price-input w-28 rounded-lg border-slate-300 px-2 py-1" placeholder="e.g., 100" value="${item.start ?? ''}"></td>
+        <td class="p-3"><input class="price-input w-28 rounded-lg border-slate-300 px-2 py-1" placeholder="e.g., 150" value="${item.end ?? ''}"></td>
+        <td class="p-3 return-cell text-slate-700">—</td>
+        <td class="p-3 cagr-cell text-slate-700">—</td>
+        <td class="p-3 sharpe-cell text-slate-700">${item.sharpe?.toFixed(2) ?? '—'}</td>
+        <td class="p-3">
+          <label class="inline-flex items-center gap-2 px-2 py-1 rounded-xl border border-slate-300 hover:bg-slate-50 cursor-pointer">
+            <input type="file" accept=".csv" class="hidden file-input" />
+            <span class="text-xs">Upload CSV</span>
+          </label>
+        </td>
+        <td class="p-3 text-right">
+          <button class="remove px-2 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100">Remove</button>
+        </td>
+      `;
 
-function formatNumber(x){
-  if (x === null || x === undefined || isNaN(x)) return '—';
-  if (Math.abs(x) >= 1e6) return (x/1e6).toFixed(2) + 'M';
-  if (Math.abs(x) >= 1000) return (x/1000).toFixed(2) + 'k';
-  return x.toFixed(2);
-}
+      // Drag & drop CSV
+      tr.addEventListener('dragover', (e)=>{ e.preventDefault(); tr.classList.add('drag-hover'); });
+      tr.addEventListener('dragleave', ()=> tr.classList.remove('drag-hover'));
+      tr.addEventListener('drop', (e)=>{
+        e.preventDefault(); tr.classList.remove('drag-hover');
+        const file = e.dataTransfer.files?.[0];
+        if (file) handleCSV(file, item, type, tr);
+      });
 
-// Chart helpers
-let chartA=null, chartB=null;
-function renderChart(canvasId, series, label){
-  const ctx = document.getElementById(canvasId).getContext('2d');
-  const labels = series.map(p => p.date.toISOString().slice(0,10));
-  const data = series.map(p => p.close);
-  if (canvasId === 'chartA' && chartA) chartA.destroy();
-  if (canvasId === 'chartB' && chartB) chartB.destroy();
-  const cfg = {
-    type: 'line',
-    data: {labels, datasets:[{label, data, fill:false, tension:0.15, pointRadius:0}]},
-    options:{plugins:{legend:{display:false}},scales:{x:{display:false},y:{display:true}},elements:{line:{borderWidth:2}}}
-  };
-  if (canvasId === 'chartA') chartA = new Chart(ctx, cfg);
-  if (canvasId === 'chartB') chartB = new Chart(ctx, cfg);
-}
+      // File input
+      tr.querySelector('.file-input').addEventListener('change', (e)=>{
+        const file = e.target.files?.[0];
+        if (file) handleCSV(file, item, type, tr);
+      });
 
-// main
-document.getElementById('analyzeBtn').addEventListener('click', runAnalysis);
-document.getElementById('loadExample').addEventListener('click', loadExamples);
-document.getElementById('exportJSON').addEventListener('click', exportJSON);
-document.getElementById('exportCSV').addEventListener('click', exportCSV);
+      // Inputs
+      tr.querySelectorAll('.price-input').forEach((inp, idx)=>{
+        inp.addEventListener('input', ()=>{
+          const val = parseFloat(inp.value);
+          if (type==='ai') {
+            if (idx===0) item.start = val; else item.end = val;
+          } else {
+            if (idx===0) item.start = val; else item.end = val;
+          }
+          render();
+        });
+      });
 
-function runAnalysis(){
-  const nameA = document.getElementById('nameA').value || 'A';
-  const nameB = document.getElementById('nameB').value || 'B';
-  document.getElementById('labelA').textContent = nameA;
-  document.getElementById('labelB').textContent = nameB;
-  let seriesA = parseCSV(document.getElementById('csvA').value || '');
-  let seriesB = parseCSV(document.getElementById('csvB').value || '');
-  // If CSVs are empty or too small, generate synthetic data
-  if (seriesA.length < 10){
-    // AI stock: higher drift, higher vol
-    seriesA = generateSyntheticData(252*2, 120, 0.18, 0.45);
-  }
-  if (seriesB.length < 10){
-    // Mutual fund: lower drift, lower vol
-    seriesB = generateSyntheticData(252*2, 90, 0.09, 0.18);
-  }
-  const tf = document.getElementById('timeframe').value;
-  const subA = sliceByTimeframe(seriesA, tf);
-  const subB = sliceByTimeframe(seriesB, tf);
+      // Remove
+      tr.querySelector('.remove').addEventListener('click', ()=>{
+        const arr = type==='ai'? state.ai : state.mf;
+        const i = arr.indexOf(item);
+        if (i>-1) arr.splice(i,1);
+        render();
+      });
 
-  const mA = computeMetrics(subA);
-  const mB = computeMetrics(subB);
+      return tr;
+    }
 
-  // Apply method adjustments
-  const method = document.getElementById('method').value;
-  let finalScoreA = mA.score;
-  let finalScoreB = mB.score;
-  if (method === 'cagr') { finalScoreA = mA.cagr; finalScoreB = mB.cagr; }
-  if (method === 'vol_adj') {
-    const k = 0.5; // penalty factor
-    finalScoreA = mA.cagr - k * mA.annualizedVol;
-    finalScoreB = mB.cagr - k * mB.annualizedVol;
-  }
+    async function handleCSV(file, item, type, tr) {
+      try {
+        const text = await file.text();
+        const data = parseCSV(text);
+        item.csvData = data;
+        // try compute Sharpe
+        item.sharpe = computeSharpe(data);
+        // auto-pick prices from timeframe
+        const s = $('#startDate').value ? new Date($('#startDate').value) : null;
+        const e = $('#endDate').value ? new Date($('#endDate').value) : null;
+        if (s) item.start = priceClosest(data, s) ?? item.start;
+        if (e) item.end = priceClosest(data, e) ?? item.end;
+        render();
+      } catch(err) {
+        alert('CSV error: '+ err.message);
+        console.error(err);
+      }
+    }
 
-  // display metrics
-  document.getElementById('cagrA').textContent = formatPct(mA.cagr);
-  document.getElementById('cagrB').textContent = formatPct(mB.cagr);
-  document.getElementById('volA').textContent = formatPct(mA.annualizedVol);
-  document.getElementById('volB').textContent = formatPct(mB.annualizedVol);
-  document.getElementById('scoreA').textContent = formatNumber(finalScoreA);
-  document.getElementById('scoreB').textContent = formatNumber(finalScoreB);
+    /*** Render ***/
+    function render() {
+      const sVal = $('#startDate').value; const eVal = $('#endDate').value;
+      const sDate = sVal ? new Date(sVal) : null;
+      const eDate = eVal ? new Date(eVal) : null;
+      const years = (sDate && eDate) ? Math.max(1/365.25, yearsBetween(sDate, eDate)) : null;
 
-  // decision
-  const decisionEl = document.getElementById('decision');
-  const metricAEl = document.getElementById('metricA');
-  const metricBEl = document.getElementById('metricB');
-  metricAEl.classList.remove('winner'); metricBEl.classList.remove('winner');
+      // Tables
+      const aiBody = $('#aiTable tbody'); aiBody.innerHTML = '';
+      state.ai.forEach(item => {
+        const tr = makeRow(item, 'ai');
+        aiBody.appendChild(tr);
+        // compute cells
+        computeRow(tr, item, years);
+      });
 
-  if (finalScoreA > finalScoreB){
-    decisionEl.innerHTML = `<strong>${nameA}</strong> shows higher growth potential by this metric.`;
-    metricAEl.classList.add('winner');
-  } else if (finalScoreB > finalScoreA){
-    decisionEl.innerHTML = `<strong>${nameB}</strong> shows higher growth potential by this metric.`;
-    metricBEl.classList.add('winner');
-  } else {
-    decisionEl.innerHTML = `Both have similar scores.`;
-  }
+      const mfBody = $('#mfTable tbody'); mfBody.innerHTML = '';
+      state.mf.forEach(item => {
+        const tr = makeRow(item, 'mf');
+        mfBody.appendChild(tr);
+        computeRow(tr, item, years);
+      });
 
-  // render charts
-  renderChart('chartA', subA, nameA);
-  renderChart('chartB', subB, nameB);
+      // Rankings
+      updateRanking(years);
+    }
 
-  // store lastResult for export
-  window._lastResult = {nameA, nameB, tf, method, metrics:{A:mA, B:mB}, finalScores:{A:finalScoreA,B:finalScoreB}};
-}
+    function computeRow(tr, item, years) {
+      const start = parseFloat(item.start);
+      const end = parseFloat(item.end);
+      let total = NaN, cagr = NaN;
+      if (isFinite(start) && isFinite(end) && start>0) {
+        total = (end/start)-1;
+        cagr = years? (Math.pow(end/start, 1/years) - 1) : total; // if no dates, show simple return
+      }
+      tr.querySelector('.return-cell').textContent = isFinite(total) ? fmtPct(total) : '—';
+      tr.querySelector('.cagr-cell').textContent = isFinite(cagr) ? fmtPct(cagr) : '—';
+      tr.querySelector('.sharpe-cell').textContent = (item.sharpe!=null && isFinite(item.sharpe)) ? item.sharpe.toFixed(2) : '—';
+    }
 
-function loadExamples(){
-  // fill csv fields with simple synthetic CSVs for user convenience
-  const a = generateSyntheticData(252, 120, 0.18, 0.45);
-  const b = generateSyntheticData(252, 90, 0.09, 0.18);
-  document.getElementById('csvA').value = a.map(p=>`${p.date.toISOString().slice(0,10)},${p.close.toFixed(4)}`).join('\\n');
-  document.getElementById('csvB').value = b.map(p=>`${p.date.toISOString().slice(0,10)},${p.close.toFixed(4)}`).join('\\n');
-  alert('Example data loaded into the textareas. Click "Analyze".');
-}
+    function collectAll() {
+      const all = [
+        ...state.ai.map(o=>({ name:o.ticker, start:o.start, end:o.end, sharpe:o.sharpe })),
+        ...state.mf.map(o=>({ name:o.symbol, start:o.start, end:o.end, sharpe:o.sharpe }))
+      ];
+      return all.filter(x=>isFinite(x.start) && isFinite(x.end) && x.start>0);
+    }
 
-function exportJSON(){
-  if (!window._lastResult){ alert('Run analysis first'); return; }
-  const blob = new Blob([JSON.stringify(window._lastResult, null, 2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'growth-result.json'; a.click();
-  URL.revokeObjectURL(url);
-}
+    function updateRanking(years) {
+      const metric = document.querySelector('input[name="rankMetric"]:checked')?.value || 'cagr';
+      const data = collectAll().map(x=>{
+        const total = (x.end/x.start)-1;
+        const cagr = years ? (Math.pow(x.end/x.start, 1/years) - 1) : total;
+        return { ...x, total, cagr };
+      });
 
-function exportCSV(){
-  if (!window._lastResult){ alert('Run analysis first'); return; }
-  // produce a small CSV of key metrics
-  const r = window._lastResult;
-  const lines = [
-    'instrument,metric,value',
-    `${r.nameA},cagr,${r.metrics.A.cagr}`,
-    `${r.nameA},volatility,${r.metrics.A.annualizedVol}`,
-    `${r.nameA},score,${r.finalScores.A}`,
-    `${r.nameB},cagr,${r.metrics.B.cagr}`,
-    `${r.nameB},volatility,${r.metrics.B.annualizedVol}`,
-    `${r.nameB},score,${r.finalScores.B}`,
-  ];
-  const blob = new Blob([lines.join('\\n')], {type:'text/csv'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'growth-result.csv'; a.click();
-  URL.revokeObjectURL(url);
-}
+      const ranked = data.filter(d=> isFinite(d[metric]) ).sort((a,b)=> b[metric]-a[metric]);
+      const list = $('#rankList'); list.innerHTML = '';
+      ranked.forEach((r, i)=>{
+        const li = document.createElement('li');
+        li.className = 'flex items-center justify-between bg-slate-50 rounded-xl px-3 py-2';
+        li.innerHTML = `
+          <span class="font-medium">${r.name}</span>
+          <span class="text-slate-600">CAGR: ${fmtPct(r.cagr)} · Return: ${fmtPct(r.total)}${(r.sharpe!=null && isFinite(r.sharpe))?` · Sharpe: ${r.sharpe.toFixed(2)}`:''}</span>
+        `;
+        list.appendChild(li);
+      });
 
-/* 
-Optional: example of fetching price history (Alpha Vantage) — uncomment and provide your API key.
-Be aware of API rate limits and CORS restrictions. You may prefer to fetch server-side.
+      // Chart top 8 by CAGR
+      const top = ranked.slice(0, 8);
+      const labels = top.map(t=>t.name);
+      const values = top.map(t=> t.cagr * 100);
+      if (!state.chart) {
+        const ctx = document.getElementById('cagrChart');
+        state.chart = new Chart(ctx, {
+          type: 'bar',
+          data: { labels, datasets: [{ label: 'CAGR (%)', data: values }] },
+          options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: (v)=> v + '%' } } } }
+        });
+      } else {
+        state.chart.data.labels = labels;
+        state.chart.data.datasets[0].data = values;
+        state.chart.update();
+      }
+    }
 
-async function fetchAlphaVantageDaily(symbol, apiKey){
-  const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${encodeURIComponent(symbol)}&outputsize=full&apikey=${apiKey}`;
-  const resp = await fetch(url);
-  const data = await resp.json();
-  const ts = data['Time Series (Daily)'];
-  if (!ts) throw new Error('No data');
-  const out = Object.keys(ts).map(dateStr => ({date:new Date(dateStr), close: parseFloat(ts[dateStr]['5. adjusted close'])}));
-  out.sort((a,b)=>a.date - b.date);
-  return out;
-}
-*/
+    /*** Event wiring ***/
+    $('#aiAdd').addEventListener('click', ()=>{
+      const t = $('#aiTicker').value.trim().toUpperCase();
+      if (!t) return;
+      if (state.ai.some(x=>x.ticker===t)) return alert('Already added');
+      state.ai.push({ ticker: t, start: '', end: '', csvData: null, sharpe: null });
+      $('#aiTicker').value='';
+      render();
+    });
 
-</script>
+    $('#mfAdd').addEventListener('click', ()=>{
+      const t = $('#mfTicker').value.trim().toUpperCase();
+      if (!t) return;
+      if (state.mf.some(x=>x.symbol===t)) return alert('Already added');
+      state.mf.push({ symbol: t, start: '', end: '', csvData: null, sharpe: null });
+      $('#mfTicker').value='';
+      render();
+    });
+
+    $('#btnAnalyze').addEventListener('click', ()=> render());
+    $$('input[name="rankMetric"]').forEach(r=> r.addEventListener('change', ()=> updateRanking($('#startDate').value && $('#endDate').value ? yearsBetween(new Date($('#startDate').value), new Date($('#endDate').value)) : null)) );
+
+    $('#btnReset').addEventListener('click', ()=>{
+      state.ai = [];
+      state.mf = [];
+      $('#startDate').value = '';
+      $('#endDate').value = '';
+      render();
+    });
+
+    // Demo data button: pre-fill a few tickers & example prices (illustrative only)
+    $('#btnDemo').addEventListener('click', ()=>{
+      $('#startDate').value = '2023-01-01';
+      $('#endDate').value = '2025-10-01';
+      state.ai = [
+        { ticker:'NVDA', start: 150, end: 980 },
+        { ticker:'MSFT', start: 240, end: 430 },
+        { ticker:'GOOGL', start: 90, end: 180 },
+        { ticker:'AMD', start: 65, end: 150 },
+        { ticker:'META', start: 120, end: 500 }
+      ];
+      state.mf = [
+        { symbol:'VFIAX', start: 350, end: 520 },
+        { symbol:'VTSAX', start: 95, end: 145 },
+        { symbol:'FSKAX', start: 110, end: 160 }
+      ];
+      render();
+    });
+
+    // Initialize with some empty rows to guide users
+    (function init() {
+      ['NVDA','MSFT','GOOGL'].forEach(t=> state.ai.push({ ticker:t, start:'', end:'', csvData:null, sharpe:null }));
+      ['VFIAX','VTSAX'].forEach(t=> state.mf.push({ symbol:t, start:'', end:'', csvData:null, sharpe:null }));
+      render();
+    })();
+  </script>
 </body>
 </html>
