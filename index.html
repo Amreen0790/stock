@@ -101,4 +101,350 @@
               <select id="method">
                 <option value="default" selected>risk-adjusted growth (CAGR/volatility)</option>
                 <option value="cagr">pure CAGR</option>
-                <option value="vol_adj">volatilit_
+                <option value="vol_adj">volatility-adjusted (CAGR - k * volatility)</option>
+              </select>
+            </div>
+
+            <div style="align-self:flex-end">
+              <button id="analyzeBtn">Analyze</button>
+            </div>
+          </div>
+
+          <div style="margin-top:12px" class="small muted">
+            Tip: If you don't paste data, the demo will generate synthetic example price series.
+            You can also replace the synthetic data by hooking a live API (example code commented below).
+          </div>
+
+          <hr style="margin:12px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)">
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <div class="metric" id="metricA">
+              <div class="small">A — <span id="labelA">AI Stock</span></div>
+              <div><strong id="cagrA">—</strong> CAGR</div>
+              <div class="small">Volatility: <strong id="volA">—</strong></div>
+              <div class="small">Score: <strong id="scoreA">—</strong></div>
+            </div>
+
+            <div class="metric" id="metricB">
+              <div class="small">B — <span id="labelB">Mutual Fund</span></div>
+              <div><strong id="cagrB">—</strong> CAGR</div>
+              <div class="small">Volatility: <strong id="volB">—</strong></div>
+              <div class="small">Score: <strong id="scoreB">—</strong></div>
+            </div>
+
+            <div style="flex:1;min-width:220px">
+              <div class="small">Decision</div>
+              <div id="decision" style="padding:10px;border-radius:8px;background:rgba(255,255,255,0.02);margin-top:6px">No analysis yet</div>
+            </div>
+          </div>
+
+          <div style="margin-top:14px">
+            <div class="small">Charts</div>
+            <canvas id="chartA" height="80"></canvas>
+            <canvas id="chartB" height="80" style="margin-top:8px"></canvas>
+          </div>
+
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div class="small">How the scoring works (simple demo model)</div>
+          <ul class="small muted">
+            <li>CAGR = compounded annual growth rate over the chosen timeframe.</li>
+            <li>Volatility = annualized standard deviation of daily returns (sqrt(252) * std(daily returns)).</li>
+            <li>Score = CAGR / volatility (higher score = more growth per unit risk).</li>
+            <li>This is a demonstration. Real investment decisions need deeper analysis.</li>
+          </ul>
+
+          <hr style="margin:8px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)">
+
+          <div class="small">Developer notes:</div>
+          <ol class="small muted">
+            <li>To fetch live data programmatically, use an API (Alpha Vantage, Yahoo Finance, etc.) — include your API key and map to CSV format expected.</li>
+            <li>Example fetch code is included in the script (commented).</li>
+          </ol>
+        </div>
+
+      </div>
+
+      <aside>
+        <div class="card">
+          <div class="small">Quick example datasets</div>
+          <button id="loadExample">Load example synthetic data</button>
+          <hr style="margin:10px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)">
+
+          <div class="small">Export</div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="exportJSON">Export results (JSON)</button>
+            <button id="exportCSV">Export CSV</button>
+          </div>
+
+          <hr style="margin:10px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)">
+          <div class="small muted">Notes</div>
+          <p class="small muted">This demo uses a simple ratio as "growth potential". You can replace scoring with ML models, analyst ratings, fundamentals, or alternative risk measures.</p>
+        </div>
+      </aside>
+    </div>
+
+    <footer>
+      Built as a local demo. Not financial advice. Use real data + backtesting before acting on anything.
+    </footer>
+  </div>
+
+<script>
+/*
+Utilities:
+- parseCSV(text) => [{date: Date, close: Number}, ...]
+- if CSV missing or invalid, generateSyntheticData(name, days, drift, vol)
+- compute CAGR, volatility, score
+*/
+
+function parseCSV(text){
+  // Accepts date,close per line; header optional
+  const lines = text.trim().split(/\\r?\\n/).map(l=>l.trim()).filter(Boolean);
+  const out = [];
+  for (let line of lines){
+    // skip obvious headers
+    if (/date/i.test(line) && /close/i.test(line)) continue;
+    const parts = line.split(/[,;\\t]/).map(p=>p.trim());
+    if (parts.length < 2) continue;
+    const date = new Date(parts[0]);
+    const close = parseFloat(parts[1].replace(/[^0-9.\\-]/g,''));
+    if (!isNaN(date.getTime()) && !isNaN(close)) out.push({date, close});
+  }
+  // sort ascending by date
+  out.sort((a,b)=>a.date - b.date);
+  return out;
+}
+
+function generateSyntheticData(days=252, start=100, drift=0.12, vol=0.35){
+  // Geometric Brownian Motion daily steps. drift and vol are annual.
+  // daily drift ~ (mu - 0.5*sigma^2)/252, daily sigma = sigma/sqrt(252)
+  const mu = drift;
+  const sigma = vol;
+  const dt = 1/252;
+  let price = start;
+  const out = [];
+  const today = new Date();
+  for(let i=days-1;i>=0;i--){
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    out.push({date:d, close: price});
+    // next
+    const rnd = gaussianRand();
+    const daily = Math.exp((mu - 0.5*sigma*sigma)*dt + sigma*Math.sqrt(dt)*rnd);
+    price = price * daily;
+  }
+  return out;
+}
+
+// Box-Muller gaussian
+function gaussianRand(){
+  let u=0,v=0;
+  while(u===0) u=Math.random();
+  while(v===0) v=Math.random();
+  return Math.sqrt(-2.0*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+
+function sliceByTimeframe(series, tf){
+  // series sorted ascending by date
+  if (!series || series.length===0) return [];
+  const lastDate = series[series.length-1].date;
+  let cutoff = new Date(lastDate);
+  switch(tf){
+    case '1M': cutoff.setMonth(cutoff.getMonth()-1); break;
+    case '3M': cutoff.setMonth(cutoff.getMonth()-3); break;
+    case '6M': cutoff.setMonth(cutoff.getMonth()-6); break;
+    case '1Y': cutoff.setFullYear(cutoff.getFullYear()-1); break;
+    case '3Y': cutoff.setFullYear(cutoff.getFullYear()-3); break;
+    default: cutoff.setFullYear(cutoff.getFullYear()-1);
+  }
+  const filtered = series.filter(pt => pt.date >= cutoff);
+  // If not enough points, return whole series
+  return filtered.length >= 5 ? filtered : series;
+}
+
+function computeMetrics(series){
+  // assume daily-ish data
+  if (!series || series.length < 2) return null;
+  const closes = series.map(p => p.close);
+  const n = closes.length;
+  const startPrice = closes[0];
+  const endPrice = closes[closes.length-1];
+  // time in years (use actual dates)
+  const days = (series[series.length-1].date - series[0].date) / (1000*3600*24);
+  const years = Math.max(days/365.25, 1/252); // avoid zero
+  // CAGR
+  const cagr = Math.pow(endPrice / startPrice, 1/years) - 1;
+  // daily returns
+  const dailyRets = [];
+  for(let i=1;i<closes.length;i++){
+    dailyRets.push( (closes[i] - closes[i-1]) / closes[i-1] );
+  }
+  // sample std dev
+  const mean = dailyRets.reduce((a,b)=>a+b,0)/dailyRets.length;
+  const variance = dailyRets.reduce((a,b)=>a + Math.pow(b-mean,2),0) / (dailyRets.length - 1 || 1);
+  const sd = Math.sqrt(variance);
+  const annualizedVol = sd * Math.sqrt(252);
+  // Score: CAGR / vol (if vol very small, handle)
+  const score = annualizedVol > 1e-6 ? (cagr / annualizedVol) : (cagr * 100);
+  return {
+    cagr, annualizedVol, score, years, startPrice, endPrice, points: series.length, dailyRets
+  };
+}
+
+function formatPct(x){
+  if (x === null || x === undefined || isNaN(x)) return '—';
+  return (x*100).toFixed(2) + '%';
+}
+
+function formatNumber(x){
+  if (x === null || x === undefined || isNaN(x)) return '—';
+  if (Math.abs(x) >= 1e6) return (x/1e6).toFixed(2) + 'M';
+  if (Math.abs(x) >= 1000) return (x/1000).toFixed(2) + 'k';
+  return x.toFixed(2);
+}
+
+// Chart helpers
+let chartA=null, chartB=null;
+function renderChart(canvasId, series, label){
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  const labels = series.map(p => p.date.toISOString().slice(0,10));
+  const data = series.map(p => p.close);
+  if (canvasId === 'chartA' && chartA) chartA.destroy();
+  if (canvasId === 'chartB' && chartB) chartB.destroy();
+  const cfg = {
+    type: 'line',
+    data: {labels, datasets:[{label, data, fill:false, tension:0.15, pointRadius:0}]},
+    options:{plugins:{legend:{display:false}},scales:{x:{display:false},y:{display:true}},elements:{line:{borderWidth:2}}}
+  };
+  if (canvasId === 'chartA') chartA = new Chart(ctx, cfg);
+  if (canvasId === 'chartB') chartB = new Chart(ctx, cfg);
+}
+
+// main
+document.getElementById('analyzeBtn').addEventListener('click', runAnalysis);
+document.getElementById('loadExample').addEventListener('click', loadExamples);
+document.getElementById('exportJSON').addEventListener('click', exportJSON);
+document.getElementById('exportCSV').addEventListener('click', exportCSV);
+
+function runAnalysis(){
+  const nameA = document.getElementById('nameA').value || 'A';
+  const nameB = document.getElementById('nameB').value || 'B';
+  document.getElementById('labelA').textContent = nameA;
+  document.getElementById('labelB').textContent = nameB;
+  let seriesA = parseCSV(document.getElementById('csvA').value || '');
+  let seriesB = parseCSV(document.getElementById('csvB').value || '');
+  // If CSVs are empty or too small, generate synthetic data
+  if (seriesA.length < 10){
+    // AI stock: higher drift, higher vol
+    seriesA = generateSyntheticData(252*2, 120, 0.18, 0.45);
+  }
+  if (seriesB.length < 10){
+    // Mutual fund: lower drift, lower vol
+    seriesB = generateSyntheticData(252*2, 90, 0.09, 0.18);
+  }
+  const tf = document.getElementById('timeframe').value;
+  const subA = sliceByTimeframe(seriesA, tf);
+  const subB = sliceByTimeframe(seriesB, tf);
+
+  const mA = computeMetrics(subA);
+  const mB = computeMetrics(subB);
+
+  // Apply method adjustments
+  const method = document.getElementById('method').value;
+  let finalScoreA = mA.score;
+  let finalScoreB = mB.score;
+  if (method === 'cagr') { finalScoreA = mA.cagr; finalScoreB = mB.cagr; }
+  if (method === 'vol_adj') {
+    const k = 0.5; // penalty factor
+    finalScoreA = mA.cagr - k * mA.annualizedVol;
+    finalScoreB = mB.cagr - k * mB.annualizedVol;
+  }
+
+  // display metrics
+  document.getElementById('cagrA').textContent = formatPct(mA.cagr);
+  document.getElementById('cagrB').textContent = formatPct(mB.cagr);
+  document.getElementById('volA').textContent = formatPct(mA.annualizedVol);
+  document.getElementById('volB').textContent = formatPct(mB.annualizedVol);
+  document.getElementById('scoreA').textContent = formatNumber(finalScoreA);
+  document.getElementById('scoreB').textContent = formatNumber(finalScoreB);
+
+  // decision
+  const decisionEl = document.getElementById('decision');
+  const metricAEl = document.getElementById('metricA');
+  const metricBEl = document.getElementById('metricB');
+  metricAEl.classList.remove('winner'); metricBEl.classList.remove('winner');
+
+  if (finalScoreA > finalScoreB){
+    decisionEl.innerHTML = `<strong>${nameA}</strong> shows higher growth potential by this metric.`;
+    metricAEl.classList.add('winner');
+  } else if (finalScoreB > finalScoreA){
+    decisionEl.innerHTML = `<strong>${nameB}</strong> shows higher growth potential by this metric.`;
+    metricBEl.classList.add('winner');
+  } else {
+    decisionEl.innerHTML = `Both have similar scores.`;
+  }
+
+  // render charts
+  renderChart('chartA', subA, nameA);
+  renderChart('chartB', subB, nameB);
+
+  // store lastResult for export
+  window._lastResult = {nameA, nameB, tf, method, metrics:{A:mA, B:mB}, finalScores:{A:finalScoreA,B:finalScoreB}};
+}
+
+function loadExamples(){
+  // fill csv fields with simple synthetic CSVs for user convenience
+  const a = generateSyntheticData(252, 120, 0.18, 0.45);
+  const b = generateSyntheticData(252, 90, 0.09, 0.18);
+  document.getElementById('csvA').value = a.map(p=>`${p.date.toISOString().slice(0,10)},${p.close.toFixed(4)}`).join('\\n');
+  document.getElementById('csvB').value = b.map(p=>`${p.date.toISOString().slice(0,10)},${p.close.toFixed(4)}`).join('\\n');
+  alert('Example data loaded into the textareas. Click "Analyze".');
+}
+
+function exportJSON(){
+  if (!window._lastResult){ alert('Run analysis first'); return; }
+  const blob = new Blob([JSON.stringify(window._lastResult, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'growth-result.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportCSV(){
+  if (!window._lastResult){ alert('Run analysis first'); return; }
+  // produce a small CSV of key metrics
+  const r = window._lastResult;
+  const lines = [
+    'instrument,metric,value',
+    `${r.nameA},cagr,${r.metrics.A.cagr}`,
+    `${r.nameA},volatility,${r.metrics.A.annualizedVol}`,
+    `${r.nameA},score,${r.finalScores.A}`,
+    `${r.nameB},cagr,${r.metrics.B.cagr}`,
+    `${r.nameB},volatility,${r.metrics.B.annualizedVol}`,
+    `${r.nameB},score,${r.finalScores.B}`,
+  ];
+  const blob = new Blob([lines.join('\\n')], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'growth-result.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* 
+Optional: example of fetching price history (Alpha Vantage) — uncomment and provide your API key.
+Be aware of API rate limits and CORS restrictions. You may prefer to fetch server-side.
+
+async function fetchAlphaVantageDaily(symbol, apiKey){
+  const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${encodeURIComponent(symbol)}&outputsize=full&apikey=${apiKey}`;
+  const resp = await fetch(url);
+  const data = await resp.json();
+  const ts = data['Time Series (Daily)'];
+  if (!ts) throw new Error('No data');
+  const out = Object.keys(ts).map(dateStr => ({date:new Date(dateStr), close: parseFloat(ts[dateStr]['5. adjusted close'])}));
+  out.sort((a,b)=>a.date - b.date);
+  return out;
+}
+*/
+
+</script>
+</body>
+</html>
